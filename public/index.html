@@ -15,11 +15,16 @@
     header {
       background: #161b22;
       border-bottom: 1px solid #30363d;
-      padding: 2rem 1.5rem;
-      text-align: center;
+      padding: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem;
     }
-    header h1 { font-size: 1.75rem; font-weight: 700; color: #f0f6fc; }
-    header p { margin-top: 0.35rem; color: #8b949e; font-size: 0.95rem; }
+    header h1 { font-size: 1.3rem; font-weight: 700; color: #f0f6fc; }
+    header p { font-size: 0.82rem; color: #8b949e; }
+    header .left { display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap; }
     main { max-width: 900px; margin: 2rem auto; padding: 0 1.5rem; }
 
     section {
@@ -51,10 +56,10 @@
     input::placeholder { color: #484f58; }
 
     button {
-      padding: 0.55rem 1.1rem;
+      padding: 0.5rem 1rem;
       border: none;
       border-radius: 6px;
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       font-weight: 500;
       cursor: pointer;
       transition: background 0.15s;
@@ -69,8 +74,20 @@
     button.small { padding: 0.35rem 0.65rem; font-size: 0.78rem; }
 
     .btn-group { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-    .inline-form { display: flex; gap: 0.75rem; align-items: flex-end; }
-    .inline-form .form-group { margin-bottom: 0; }
+
+    .login-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .login-bar input {
+      width: 180px;
+      padding: 0.4rem 0.6rem;
+      font-size: 0.82rem;
+    }
+    .login-bar .status { font-size: 0.78rem; color: #8b949e; }
+    .login-bar .status.authed { color: #3fb950; }
+    .login-bar .status.error { color: #f85149; }
 
     .endpoint-card {
       background: #0d1117;
@@ -173,67 +190,34 @@
     .copy-btn { cursor: pointer; background: none; border: none; color: #8b949e; padding: 0.2rem; }
     .copy-btn:hover { color: #58a6ff; }
 
-    .login-overlay {
-      position: fixed; inset: 0;
-      background: #0d1117;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 200;
-    }
-    .login-overlay.hidden { display: none; }
-    .login-box {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 8px;
-      padding: 2rem;
-      width: 90%;
-      max-width: 380px;
-      text-align: center;
-    }
-    .login-box h2 { margin-bottom: 0.5rem; }
-    .login-box p { color: #8b949e; font-size: 0.85rem; margin-bottom: 1.25rem; }
-    .login-box input { margin-bottom: 0.75rem; }
-    .login-box button { width: 100%; }
-    .logout-btn {
-      position: absolute;
-      top: 1rem;
-      right: 1rem;
-      background: #21262d;
-      color: #8b949e;
-      border: 1px solid #30363d;
-      padding: 0.35rem 0.65rem;
-      font-size: 0.78rem;
-    }
-    .logout-btn:hover { color: #f85149; border-color: #f85149; }
-    header { position: relative; }
+    .admin-section { display: none; }
+    .admin-section.visible { display: block; }
 
     @media (max-width: 600px) {
       .form-row { flex-direction: column; }
       .endpoint-header { flex-direction: column; align-items: flex-start; }
+      header { flex-direction: column; align-items: stretch; text-align: center; }
+      .login-bar { flex-wrap: wrap; }
+      .login-bar input { width: 100%; }
     }
   </style>
 </head>
 <body>
 
-<div id="login-overlay" class="login-overlay">
-  <div class="login-box">
-    <h2>JSON Server</h2>
-    <p>Enter your admin token to manage endpoints</p>
-    <input type="password" id="token-input" placeholder="Admin token" />
-    <button class="primary" id="login-btn">Unlock</button>
-    <p id="login-error" style="color:#f85149;font-size:0.8rem;margin-top:0.5rem;display:none;"></p>
-  </div>
-</div>
-
 <header>
-  <h1>JSON Server</h1>
-  <p>Create custom API endpoints with any JSON data</p>
-  <button class="logout-btn" id="logout-btn" style="display:none;">Logout</button>
+  <div class="left">
+    <h1>JSON Server</h1>
+    <p>Custom API endpoints, instant</p>
+  </div>
+  <div class="login-bar">
+    <input type="password" id="token-input" placeholder="Admin token" />
+    <button class="secondary" id="auth-btn">Unlock</button>
+    <span class="status" id="auth-status"></span>
+  </div>
 </header>
 
 <main>
-  <section id="create-section">
+  <section class="admin-section" id="create-section">
     <h2>Create Endpoint</h2>
     <form id="create-form">
       <div class="form-row">
@@ -254,9 +238,9 @@
   </section>
 
   <section id="endpoints-section">
-    <h2>Your Endpoints</h2>
+    <h2>Endpoints</h2>
     <div id="endpoints-list">
-      <div class="empty-state">No endpoints yet. Create one above!</div>
+      <div class="empty-state">Loading...</div>
     </div>
   </section>
 </main>
@@ -284,20 +268,15 @@
 </div>
 
 <script>
-const API = "/__admin/endpoints";
+const ADMIN_API = "/__admin/endpoints";
+const PUBLIC_API = "/__endpoints";
 const toastEl = document.getElementById("toast");
-const loginOverlay = document.getElementById("login-overlay");
-const loginError = document.getElementById("login-error");
 let toastTimer = null;
+let isAuthed = false;
 
 function getToken() { return sessionStorage.getItem("token"); }
 function setToken(t) { sessionStorage.setItem("token", t); }
 function clearToken() { sessionStorage.removeItem("token"); }
-
-function authHeaders() {
-  const t = getToken();
-  return t ? { "Content-Type": "application/json", "Authorization": "Bearer " + t } : { "Content-Type": "application/json" };
-}
 
 function toast(msg, isError = false) {
   toastEl.textContent = msg;
@@ -306,92 +285,34 @@ function toast(msg, isError = false) {
   toastTimer = setTimeout(() => { toastEl.className = "toast"; }, 3000);
 }
 
-function getOrigin() {
-  return window.location.origin;
-}
-
-function formatDate(iso) {
-  return new Date(iso).toLocaleString();
-}
+function getOrigin() { return window.location.origin; }
+function formatDate(iso) { return new Date(iso).toLocaleString(); }
 
 function previewData(data, maxLen = 300) {
   const json = JSON.stringify(data, null, 2);
   return json.length > maxLen ? json.slice(0, maxLen) + " …" : json;
 }
 
-async function checkAuth() {
-  const token = getToken();
-  if (!token) { showLogin(); return false; }
-  const res = await fetch(API, { headers: { "Authorization": "Bearer " + token } });
-  if (res.status === 401) { clearToken(); showLogin(); return false; }
-  if (!res.ok) { showLogin(); return false; }
-  return true;
-}
-
-function showLogin() {
-  loginOverlay.classList.remove("hidden");
-  document.getElementById("logout-btn").style.display = "none";
-}
-
-function hideLogin() {
-  loginOverlay.classList.add("hidden");
-  document.getElementById("logout-btn").style.display = "block";
-}
-
-document.getElementById("login-btn").addEventListener("click", async () => {
-  const token = document.getElementById("token-input").value.trim();
-  if (!token) { loginError.textContent = "Token is required"; loginError.style.display = "block"; return; }
-  const res = await fetch(API, { headers: { "Authorization": "Bearer " + token } });
-  if (res.status === 401) { loginError.textContent = "Invalid token"; loginError.style.display = "block"; return; }
-  if (!res.ok) { loginError.textContent = "Connection error"; loginError.style.display = "block"; return; }
-  loginError.style.display = "none";
-  setToken(token);
-  hideLogin();
-  loadEndpoints();
-});
-
-document.getElementById("token-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") document.getElementById("login-btn").click();
-});
-
-document.getElementById("logout-btn").addEventListener("click", () => {
-  clearToken();
-  showLogin();
-  document.getElementById("token-input").value = "";
-  loginError.style.display = "none";
-});
-
-async function authFetch(url, options = {}) {
-  const headers = { ...authHeaders(), ...options.headers };
-  const res = await fetch(url, { ...options, headers });
-  if (res.status === 401) {
-    clearToken();
-    showLogin();
-    return null;
-  }
-  return res;
-}
-
-async function loadEndpoints() {
-  const res = await authFetch(API);
-  if (!res) return;
-  if (!res.ok) {
-    document.getElementById("endpoints-list").innerHTML =
-      '<div class="empty-state">Failed to load endpoints.</div>';
-    return;
-  }
-  const endpoints = await res.json();
-  renderEndpoints(endpoints);
+function escHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
 }
 
 function renderEndpoints(endpoints) {
   const container = document.getElementById("endpoints-list");
   if (!endpoints.length) {
-    container.innerHTML = '<div class="empty-state">No endpoints yet. Create one above!</div>';
+    container.innerHTML = '<div class="empty-state">No endpoints yet.</div>';
     return;
   }
   container.innerHTML = endpoints.map(ep => {
     const url = getOrigin() + ep.path;
+    const adminBtns = isAuthed ? `
+      <div class="btn-group">
+        <button class="secondary small" onclick="testEndpoint('${escHtml(ep.path)}')">Test</button>
+        <button class="secondary small" onclick="editEndpoint('${escHtml(ep.path)}')">Edit</button>
+        <button class="danger small" onclick="deleteEndpoint('${escHtml(ep.path)}')">Delete</button>
+      </div>` : '';
     return `
       <div class="endpoint-card">
         <div class="endpoint-header">
@@ -400,11 +321,7 @@ function renderEndpoints(endpoints) {
             <div class="endpoint-url">${escHtml(url)} <button class="copy-btn" onclick="copyText('${escHtml(url)}')" title="Copy URL">📋</button></div>
             <div class="endpoint-meta">Created ${formatDate(ep.createdAt)} · Updated ${formatDate(ep.updatedAt)}</div>
           </div>
-          <div class="btn-group">
-            <button class="secondary small" onclick="testEndpoint('${escHtml(ep.path)}')">Test</button>
-            <button class="secondary small" onclick="editEndpoint('${escHtml(ep.path)}')">Edit</button>
-            <button class="danger small" onclick="deleteEndpoint('${escHtml(ep.path)}')">Delete</button>
-          </div>
+          ${adminBtns}
         </div>
         <div class="endpoint-data-preview">${escHtml(previewData(ep.data))}</div>
       </div>
@@ -412,10 +329,78 @@ function renderEndpoints(endpoints) {
   }).join("");
 }
 
-function escHtml(s) {
-  const d = document.createElement("div");
-  d.textContent = s;
-  return d.innerHTML;
+async function loadPublicEndpoints() {
+  try {
+    const res = await fetch(PUBLIC_API);
+    if (!res.ok) throw new Error("Failed to load");
+    const endpoints = await res.json();
+    renderEndpoints(endpoints);
+  } catch {
+    document.getElementById("endpoints-list").innerHTML =
+      '<div class="empty-state">Failed to load endpoints.</div>';
+  }
+}
+
+function showAdminUI(show) {
+  document.getElementById("create-section").classList.toggle("visible", show);
+}
+
+async function verifyToken(token) {
+  try {
+    const res = await fetch(ADMIN_API, { headers: { "Authorization": "Bearer " + token } });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function setAuth(token) {
+  const valid = await verifyToken(token);
+  if (valid) {
+    setToken(token);
+    isAuthed = true;
+    showAdminUI(true);
+    document.getElementById("auth-status").textContent = "Authenticated";
+    document.getElementById("auth-status").className = "status authed";
+    document.getElementById("auth-btn").textContent = "Lock";
+    document.getElementById("token-input").value = "";
+    toast("Authenticated");
+    loadPublicEndpoints();
+  } else {
+    document.getElementById("auth-status").textContent = "Invalid token";
+    document.getElementById("auth-status").className = "status error";
+  }
+}
+
+function clearAuth() {
+  clearToken();
+  isAuthed = false;
+  showAdminUI(false);
+  document.getElementById("auth-status").textContent = "";
+  document.getElementById("auth-status").className = "status";
+  document.getElementById("auth-btn").textContent = "Unlock";
+  toast("Logged out");
+  loadPublicEndpoints();
+}
+
+document.getElementById("auth-btn").addEventListener("click", async () => {
+  if (isAuthed) { clearAuth(); return; }
+  const token = document.getElementById("token-input").value.trim();
+  if (!token) { document.getElementById("auth-status").textContent = "Enter a token"; document.getElementById("auth-status").className = "status error"; return; }
+  await setAuth(token);
+});
+
+document.getElementById("token-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("auth-btn").click();
+});
+
+async function authFetch(url, options = {}) {
+  const token = getToken();
+  if (!token) return null;
+  const headers = { "Content-Type": "application/json", "Authorization": "Bearer " + token, ...options.headers };
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401) { clearAuth(); return null; }
+  return res;
 }
 
 async function copyText(text) {
@@ -431,7 +416,8 @@ async function testEndpoint(path) {
   try {
     const res = await fetch(path);
     const data = await res.json();
-    toast("Response: " + JSON.stringify(data).slice(0, 80) + (JSON.stringify(data).length > 80 ? "…" : ""));
+    const preview = JSON.stringify(data);
+    toast("Response: " + preview.slice(0, 80) + (preview.length > 80 ? "…" : ""));
   } catch {
     toast("Request failed", true);
   }
@@ -442,7 +428,7 @@ function editEndpoint(path) {
 }
 
 async function loadSingleEndpoint(path) {
-  const res = await authFetch(API);
+  const res = await authFetch(ADMIN_API);
   if (!res) return;
   const all = await res.json();
   const ep = all.find(e => e.path === path);
@@ -461,7 +447,7 @@ document.getElementById("edit-form").addEventListener("submit", async (e) => {
     toast("Invalid JSON", true);
     return;
   }
-  const res = await authFetch(API, {
+  const res = await authFetch(ADMIN_API, {
     method: "PUT",
     body: JSON.stringify({ path, data }),
   });
@@ -473,7 +459,7 @@ document.getElementById("edit-form").addEventListener("submit", async (e) => {
   }
   document.getElementById("edit-modal").classList.remove("open");
   toast("Endpoint updated!");
-  loadEndpoints();
+  loadPublicEndpoints();
 });
 
 document.getElementById("edit-cancel").addEventListener("click", () => {
@@ -488,7 +474,7 @@ document.getElementById("edit-modal").addEventListener("click", (e) => {
 
 async function deleteEndpoint(path) {
   if (!confirm(`Delete endpoint "${path}"?`)) return;
-  const res = await authFetch(API, {
+  const res = await authFetch(ADMIN_API, {
     method: "DELETE",
     body: JSON.stringify({ path }),
   });
@@ -499,7 +485,7 @@ async function deleteEndpoint(path) {
     return;
   }
   toast("Endpoint deleted!");
-  loadEndpoints();
+  loadPublicEndpoints();
 }
 
 document.getElementById("create-form").addEventListener("submit", async (e) => {
@@ -515,7 +501,7 @@ document.getElementById("create-form").addEventListener("submit", async (e) => {
     toast("Invalid JSON", true);
     return;
   }
-  const res = await authFetch(API, {
+  const res = await authFetch(ADMIN_API, {
     method: "POST",
     body: JSON.stringify({ path, data }),
   });
@@ -528,12 +514,24 @@ document.getElementById("create-form").addEventListener("submit", async (e) => {
   document.getElementById("path").value = "";
   document.getElementById("data").value = "";
   toast("Endpoint created!");
-  loadEndpoints();
+  loadPublicEndpoints();
 });
 
 (async () => {
-  const authed = await checkAuth();
-  if (authed) { hideLogin(); loadEndpoints(); }
+  const token = getToken();
+  if (token) {
+    const valid = await verifyToken(token);
+    if (valid) {
+      isAuthed = true;
+      showAdminUI(true);
+      document.getElementById("auth-status").textContent = "Authenticated";
+      document.getElementById("auth-status").className = "status authed";
+      document.getElementById("auth-btn").textContent = "Lock";
+    } else {
+      clearToken();
+    }
+  }
+  loadPublicEndpoints();
 })();
 </script>
 </body>

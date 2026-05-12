@@ -80,6 +80,15 @@ admin.delete("/endpoints", async (c) => {
 
 app.route("/__admin", admin);
 
+app.get("/__endpoints", async (c) => {
+  const kv = c.env.ENDPOINTS_KV;
+  const keys = await kv.list({ prefix: "ep:" });
+  if (keys.keys.length === 0) return c.json([]);
+  const values = await Promise.all(keys.keys.map((k) => kv.get(k.name)));
+  const endpoints = values.filter(Boolean).map((v) => JSON.parse(v!));
+  return c.json(endpoints, 200, { "Cache-Control": "no-store" });
+});
+
 app.all("*", async (c) => {
   const kv = c.env.ENDPOINTS_KV;
   const raw = await kv.get(`ep:${c.req.path}`);
