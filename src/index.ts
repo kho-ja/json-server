@@ -14,10 +14,18 @@ app.use(
   "/__admin/*",
   cors({
     origin: "*",
-    allowHeaders: ["Content-Type"],
+    allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   })
 );
+
+app.use("/__admin/*", async (c, next) => {
+  const auth = c.req.header("Authorization");
+  if (!auth || !auth.startsWith("Bearer ") || auth.slice(7) !== c.env.TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  await next();
+});
 
 const admin = new Hono<{ Bindings: CloudflareBindings }>();
 

@@ -8,6 +8,7 @@ declare namespace Cloudflare {
 	interface Env {
 		ASSETS: Fetcher;
 		ENDPOINTS_KV: KVNamespace;
+		TOKEN: string;
 	}
 }
 interface CloudflareBindings extends Cloudflare.Env {}
