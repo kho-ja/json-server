@@ -1,19 +1,444 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Hello, World!</title>
-	</head>
-	<body>
-		<h1 id="heading"></h1>
-		<script>
-			fetch('/message')
-				.then((resp) => resp.text())
-				.then((text) => {
-					const h1 = document.getElementById('heading');
-					h1.textContent = text;
-				});
-		</script>
-	</body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JSON Server</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+    }
+    header {
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 2rem 1.5rem;
+      text-align: center;
+    }
+    header h1 { font-size: 1.75rem; font-weight: 700; color: #f0f6fc; }
+    header p { margin-top: 0.35rem; color: #8b949e; font-size: 0.95rem; }
+    main { max-width: 900px; margin: 2rem auto; padding: 0 1.5rem; }
+
+    section {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    section h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; color: #f0f6fc; }
+
+    .form-row { display: flex; gap: 0.75rem; align-items: flex-start; }
+    .form-group { flex: 1; }
+    label { display: block; font-size: 0.8rem; font-weight: 500; color: #8b949e; margin-bottom: 0.35rem; }
+    input, textarea {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      font-size: 0.9rem;
+      font-family: "SF Mono", "Cascadia Code", "JetBrains Mono", monospace;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, textarea:focus { border-color: #58a6ff; }
+    textarea { resize: vertical; min-height: 120px; tab-size: 2; }
+    input::placeholder { color: #484f58; }
+
+    button {
+      padding: 0.55rem 1.1rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    button.primary { background: #238636; color: #fff; }
+    button.primary:hover { background: #2ea043; }
+    button.danger { background: #da3633; color: #fff; }
+    button.danger:hover { background: #f85149; }
+    button.secondary { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
+    button.secondary:hover { background: #30363d; }
+    button.small { padding: 0.35rem 0.65rem; font-size: 0.78rem; }
+
+    .btn-group { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .inline-form { display: flex; gap: 0.75rem; align-items: flex-end; }
+    .inline-form .form-group { margin-bottom: 0; }
+
+    .endpoint-card {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .endpoint-card:last-child { margin-bottom: 0; }
+    .endpoint-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .endpoint-path {
+      font-family: "SF Mono", "Cascadia Code", "JetBrains Mono", monospace;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #58a6ff;
+      word-break: break-all;
+    }
+    .endpoint-url {
+      font-family: "SF Mono", "Cascadia Code", "JetBrains Mono", monospace;
+      font-size: 0.78rem;
+      color: #8b949e;
+      word-break: break-all;
+      margin-top: 0.2rem;
+    }
+    .endpoint-meta {
+      font-size: 0.75rem;
+      color: #484f58;
+      margin-top: 0.3rem;
+    }
+    .endpoint-data-preview {
+      margin-top: 0.65rem;
+      max-height: 140px;
+      overflow: auto;
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 4px;
+      padding: 0.6rem;
+      font-family: "SF Mono", "Cascadia Code", "JetBrains Mono", monospace;
+      font-size: 0.78rem;
+      color: #8b949e;
+      white-space: pre;
+      tab-size: 2;
+    }
+
+    .empty-state {
+      text-align: center;
+      color: #484f58;
+      padding: 2.5rem 1rem;
+      font-size: 0.9rem;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: #238636;
+      color: #fff;
+      padding: 0.75rem 1.25rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.25s, transform 0.25s;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.error { background: #da3633; }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 1.5rem;
+      width: 90%;
+      max-width: 600px;
+      max-height: 85vh;
+      overflow-y: auto;
+    }
+    .modal h3 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; }
+    .modal-buttons { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1rem; }
+
+    .copy-btn { cursor: pointer; background: none; border: none; color: #8b949e; padding: 0.2rem; }
+    .copy-btn:hover { color: #58a6ff; }
+
+    @media (max-width: 600px) {
+      .form-row { flex-direction: column; }
+      .endpoint-header { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>JSON Server</h1>
+  <p>Create custom API endpoints with any JSON data</p>
+</header>
+
+<main>
+  <section id="create-section">
+    <h2>Create Endpoint</h2>
+    <form id="create-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="path">Path</label>
+          <input type="text" id="path" placeholder="/api/users" required />
+        </div>
+        <div class="form-group" style="flex: 0 0 auto;">
+          <label>&nbsp;</label>
+          <button type="submit" class="primary" style="padding:0.6rem 1.25rem;">Create</button>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:0.75rem;">
+        <label for="data">JSON Data</label>
+        <textarea id="data" rows="8" placeholder='{"users": []}' required spellcheck="false"></textarea>
+      </div>
+    </form>
+  </section>
+
+  <section id="endpoints-section">
+    <h2>Your Endpoints</h2>
+    <div id="endpoints-list">
+      <div class="empty-state">No endpoints yet. Create one above!</div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<div id="edit-modal" class="modal-overlay">
+  <div class="modal">
+    <h3>Edit Endpoint</h3>
+    <form id="edit-form">
+      <div class="form-group">
+        <label>Path</label>
+        <input type="text" id="edit-path" disabled style="opacity:0.6;" />
+      </div>
+      <div class="form-group" style="margin-top:0.75rem;">
+        <label for="edit-data">JSON Data</label>
+        <textarea id="edit-data" rows="10" required spellcheck="false"></textarea>
+      </div>
+      <div class="modal-buttons">
+        <button type="button" class="secondary" id="edit-cancel">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const API = "/__admin/endpoints";
+const toastEl = document.getElementById("toast");
+let toastTimer = null;
+
+function toast(msg, isError = false) {
+  toastEl.textContent = msg;
+  toastEl.className = "toast" + (isError ? " error" : "") + " show";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toastEl.className = "toast"; }, 3000);
+}
+
+function getOrigin() {
+  return window.location.origin;
+}
+
+function formatDate(iso) {
+  return new Date(iso).toLocaleString();
+}
+
+function previewData(data, maxLen = 300) {
+  const json = JSON.stringify(data, null, 2);
+  return json.length > maxLen ? json.slice(0, maxLen) + " …" : json;
+}
+
+async function loadEndpoints() {
+  try {
+    const res = await fetch(API);
+    if (!res.ok) throw new Error("Failed to load");
+    const endpoints = await res.json();
+    renderEndpoints(endpoints);
+  } catch (e) {
+    document.getElementById("endpoints-list").innerHTML =
+      '<div class="empty-state">Failed to load endpoints.</div>';
+  }
+}
+
+function renderEndpoints(endpoints) {
+  const container = document.getElementById("endpoints-list");
+  if (!endpoints.length) {
+    container.innerHTML = '<div class="empty-state">No endpoints yet. Create one above!</div>';
+    return;
+  }
+  container.innerHTML = endpoints.map(ep => {
+    const url = getOrigin() + ep.path;
+    return `
+      <div class="endpoint-card">
+        <div class="endpoint-header">
+          <div>
+            <div class="endpoint-path">${escHtml(ep.path)}</div>
+            <div class="endpoint-url">${escHtml(url)} <button class="copy-btn" onclick="copyText('${escHtml(url)}')" title="Copy URL">📋</button></div>
+            <div class="endpoint-meta">Created ${formatDate(ep.createdAt)} · Updated ${formatDate(ep.updatedAt)}</div>
+          </div>
+          <div class="btn-group">
+            <button class="secondary small" onclick="testEndpoint('${escHtml(ep.path)}')">Test</button>
+            <button class="secondary small" onclick="editEndpoint('${escHtml(ep.path)}')">Edit</button>
+            <button class="danger small" onclick="deleteEndpoint('${escHtml(ep.path)}')">Delete</button>
+          </div>
+        </div>
+        <div class="endpoint-data-preview">${escHtml(previewData(ep.data))}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+function escHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("Copied to clipboard!");
+  } catch {
+    toast("Failed to copy", true);
+  }
+}
+
+async function testEndpoint(path) {
+  try {
+    const res = await fetch(path);
+    const data = await res.json();
+    toast("Response: " + JSON.stringify(data).slice(0, 80) + (JSON.stringify(data).length > 80 ? "…" : ""));
+  } catch {
+    toast("Request failed", true);
+  }
+}
+
+function editEndpoint(path) {
+  const list = Array.from(document.querySelectorAll(".endpoint-card"));
+  // find endpoint from API data by refetching - simpler to just get from a re-fetch
+  loadSingleEndpoint(path);
+}
+
+async function loadSingleEndpoint(path) {
+  try {
+    const res = await fetch(API);
+    const all = await res.json();
+    const ep = all.find(e => e.path === path);
+    if (!ep) { toast("Endpoint not found", true); return; }
+    document.getElementById("edit-path").value = ep.path;
+    document.getElementById("edit-data").value = JSON.stringify(ep.data, null, 2);
+    document.getElementById("edit-modal").classList.add("open");
+  } catch {
+    toast("Failed to load endpoint", true);
+  }
+}
+
+document.getElementById("edit-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const path = document.getElementById("edit-path").value;
+  const dataRaw = document.getElementById("edit-data").value;
+  let data;
+  try { data = JSON.parse(dataRaw); } catch {
+    toast("Invalid JSON", true);
+    return;
+  }
+  try {
+    const res = await fetch(API, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, data }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      toast(err.error || "Update failed", true);
+      return;
+    }
+    document.getElementById("edit-modal").classList.remove("open");
+    toast("Endpoint updated!");
+    loadEndpoints();
+  } catch {
+    toast("Update failed", true);
+  }
+});
+
+document.getElementById("edit-cancel").addEventListener("click", () => {
+  document.getElementById("edit-modal").classList.remove("open");
+});
+
+document.getElementById("edit-modal").addEventListener("click", (e) => {
+  if (e.target === document.getElementById("edit-modal")) {
+    document.getElementById("edit-modal").classList.remove("open");
+  }
+});
+
+async function deleteEndpoint(path) {
+  if (!confirm(`Delete endpoint "${path}"?`)) return;
+  try {
+    const res = await fetch(API, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      toast(err.error || "Delete failed", true);
+      return;
+    }
+    toast("Endpoint deleted!");
+    loadEndpoints();
+  } catch {
+    toast("Delete failed", true);
+  }
+}
+
+document.getElementById("create-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const path = document.getElementById("path").value.trim();
+  const dataRaw = document.getElementById("data").value;
+  if (!path.startsWith("/")) {
+    toast("Path must start with /", true);
+    return;
+  }
+  let data;
+  try { data = JSON.parse(dataRaw); } catch {
+    toast("Invalid JSON", true);
+    return;
+  }
+  try {
+    const res = await fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, data }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      toast(err.error || "Creation failed", true);
+      return;
+    }
+    document.getElementById("path").value = "";
+    document.getElementById("data").value = "";
+    toast("Endpoint created!");
+    loadEndpoints();
+  } catch {
+    toast("Creation failed", true);
+  }
+});
+
+loadEndpoints();
+</script>
+</body>
 </html>

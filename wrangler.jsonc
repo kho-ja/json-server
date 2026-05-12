@@ -11,6 +11,13 @@
 		"binding": "ASSETS",
 		"directory": "./public"
 	},
+	"kv_namespaces": [
+		{
+			"binding": "ENDPOINTS_KV",
+			"id": "77518ca4f4f346119792b184922e1c0a",
+			"preview_id": "4f409f97b2684c06b0cb33e1fa0ea533"
+		}
+	],
 	"observability": {
 		"enabled": true
 	},
